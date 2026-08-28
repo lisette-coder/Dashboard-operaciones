@@ -1,0 +1,15 @@
+# Entorno virtual
+venv/
+ven/
+env/
+
+# Credenciales sensibles
+credentials.json
+*.env
+
+# Archivos de prueba / temporales
+temp_solistica.xlsx
+
+# Caché de Python
+__pycache__/
+*.pyc
