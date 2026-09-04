@@ -21,7 +21,7 @@ def render_login():
         
         with st.form("form_login"):
             usuario = st.text_input("Usuario")
-            password = st.text_input("Contraseñá", type="password")
+            password = st.text_input("Contraseña", type="password")
             submit = st.form_submit_button("Iniciar Sesión")
             
             if submit:
@@ -32,11 +32,6 @@ def render_login():
                     st.rerun()
                 else:
                     st.error("Usuario o contraseña incorrectos.")
-
-
-
-
-
 
 
 

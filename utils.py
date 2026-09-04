@@ -1,3 +1,5 @@
+import io
+import requests
 from datetime import datetime
 import gdown
 import pandas as pd
@@ -5,9 +7,10 @@ import plotly.express as px
 import streamlit as st
 
 
-# Conecta al archivo Excel y carga base de datos
+# Conecta a los archivos Excel y carga base de datos
+# Base del consolidado 
 @st.cache_data(ttl=60)
-def load_data():
+def load_data_consolidado():
   drive_url = "https://docs.google.com/spreadsheets/d/1NaIOHho98ZpRMfOoyxQFW6HeKvarkUvj/edit?gid=2069564386#gid=2069564386"
   output_file = "temp_solistica.xlsx"
 
@@ -24,6 +27,31 @@ def load_data():
   except Exception as e:
     st.error(f"Error al conectar con Google Drive: {e}")
     return None
+
+@st.cache_data(ttl=60)
+def load_data_deuda():
+  drive_url = "https://docs.google.com/spreadsheets/d/1NaIOHho98ZpRMfOoyxQFW6HeKvarkUvj/edit?gid=2069564386#gid=2069564386"
+  output_file = "temp_solistica_deuda.xlsx"
+
+  try:
+    if "/d/" in drive_url:
+      file_id = drive_url.split("/d/")[1].split("/")[0]
+      download_url = f"https://drive.google.com/uc?id={file_id}"
+
+      gdown.download(download_url, output_file, quiet=True)
+
+      # Lee la pestaña principal
+      df_deuda = pd.read_excel(output_file, sheet_name="Resumen interes")
+      return df_deuda
+  except Exception as e:
+    st.error(f"Error al conectar con Google Drive: {e}")
+    return None
+
+
+
+  
+
+
 
 nombres_meses = {
         1: "Enero",
@@ -169,6 +197,13 @@ def render_curva_financiera_generica(
     if date_column not in df_filtrado.columns:
         st.warning(f"No se encontró la columna de fecha '{date_column}' en los datos.")
         return
+    
+    if not df_filtrado.empty and columna_metrica in df_filtrado.columns:
+        total_filtrado = df_filtrado[columna_metrica].sum()
+        st.metric(
+            label=f"Total Acumulado ({tipo_filtro})",
+            value=f"${total_filtrado:,.2f}",
+        )
 
     # 3. Procesamiento y agrupación por día
     df_filtrado["Fecha_Dia"] = pd.to_datetime(df_filtrado[date_column], errors="coerce").dt.date
@@ -211,10 +246,6 @@ def render_curva_financiera_generica(
     else:
         st.warning("No hay datos diarios disponibles para el filtro seleccionado.")
 
-
-
-#Funcion para curva dual
-
 def render_curva_cartera_dual(df, columna_metrica, titulo_base, date_column="Fecha Vencimiento"):
     """
     Renderiza una gráfica con dos líneas separadas por estatus y agrupadas estrictamente por día:
@@ -234,9 +265,30 @@ def render_curva_cartera_dual(df, columna_metrica, titulo_base, date_column="Fec
     if date_column not in df_filtrado.columns or "Estatus Pago a Kamina" not in df_filtrado.columns:
         st.warning(f"Faltan columnas necesarias ('{date_column}' o 'Estatus Pago a Kamina') en los datos.")
         return
+    df_pendiente = df_filtrado[df_filtrado["Estatus Pago a Kamina"] == "To be paid"]
+    df_pagado = df_filtrado[df_filtrado["Estatus Pago a Kamina"] == "PAID"]
+
+
+    if not df_filtrado.empty and columna_metrica in df_filtrado.columns:
+        total_pagado = df_pagado[columna_metrica].sum()
+        total_pendiente = df_pendiente[columna_metrica].sum()
+
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            st.metric(
+                label=f"Dinero Cobrado ({tipo_filtro})",
+                value=f"${total_pagado:,.2f}",
+            )
+        with col_m2:
+            st.metric(
+                label=f"Dinero por Cobrar ({tipo_filtro})",
+                value=f"${total_pendiente:,.2f}",
+            )
+
 
     # 2. Convertimos la columna a fecha diaria estricta
     df_filtrado["Fecha_Dia"] = pd.to_datetime(df_filtrado[date_column], errors="coerce").dt.date
+    
 
     # 3. Separamos los dos grupos para la gráfica de doble línea
     # Grupo A: Lo que está pendiente ("To be paid")
@@ -291,18 +343,19 @@ def render_curva_cartera_dual(df, columna_metrica, titulo_base, date_column="Fec
         st.warning("No hay datos diarios disponibles para graficar las dos líneas en este rango.")
 
 
-# Funcion para generar la gráfica de barras apiladas de Revenue vs Rebate por Mes
-def render_grafica_revenue_rebate_dual(df, date_column="Fecha de Dispersión"):
+def render_curva_revenue_rebate_dual(df, date_column="Fecha de Dispersión"):
     """
-    Renderiza una gráfica de barras apiladas mensual mostrando Revenue (80%) y Rebate Broker (20%).
+    Renderiza la evolución diaria y tarjetas de resumen para Revenue Kamina y Rebate Broker.
+    Muestra: Descuento Total, Revenue (80%) y Rebate (20%).
     """
     st.markdown("---")
-    st.subheader("📊 Distribución Mensual de Ingresos: Revenue Kamina vs. Rebate Broker")
+    st.subheader("📈 Evolución Diaria: Revenue Kamina vs. Rebate Broker")
 
-    if "Revenue Kamina" not in df.columns or "Rebate Broker" not in df.columns:
-        st.warning("No se encontraron las columnas calculadas de Revenue y Rebate.")
+    if "Descuento" not in df.columns:
+        st.warning("No se encontró la columna 'Descuento' en los datos.")
         return
 
+    # 1. Aplicamos el filtro de tiempo usando la fecha de dispersión
     df_filtrado, tipo_filtro = render_filtros_tiempo(
         df, 
         sufijo_key="revenue_rebate_dual", 
@@ -310,49 +363,79 @@ def render_grafica_revenue_rebate_dual(df, date_column="Fecha de Dispersión"):
     )
 
     if date_column not in df_filtrado.columns:
-        st.warning(f"No se encontró la columna de fecha '{date_column}'.")
+        st.warning(f"No se encontró la columna de fecha '{date_column}' en los datos.")
         return
 
-    # Convertimos a fecha y extraemos el Periodo Mensual (YYYY-MM)
-    df_filtrado["_Fecha_Parsed"] = pd.to_datetime(df_filtrado[date_column], errors="coerce")
-    df_filtrado["Mes_Periodo"] = df_filtrado["_Fecha_Parsed"].dt.to_period("M").astype(str)
-    
-    df_agrupado = (
-        df_filtrado.groupby("Mes_Periodo")[["Revenue Kamina", "Rebate Broker"]]
-        .sum()
-        .reset_index()
-    )
-    df_agrupado = df_agrupado.sort_values(by="Mes_Periodo")
+    # 2. Cálculos para las TRES tarjetas en el periodo filtrado
+    if not df_filtrado.empty:
+        total_descuento = df_filtrado["Descuento"].sum()
+        total_revenue = total_descuento * 0.80
+        total_rebate = total_descuento * 0.20
 
-    if not df_agrupado.empty:
-        df_melted = df_agrupado.melt(
-            id_vars=["Mes_Periodo"], 
-            value_vars=["Revenue Kamina", "Rebate Broker"],
-            var_name="Concepto", 
-            value_name="Monto"
-        )
+        # Mostramos 3 columnas con las métricas claras
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(
+                label=f"Ingresos Kamina ({tipo_filtro})",
+                value=f"${total_descuento:,.2f}",
+            )
+        with col2:
+            st.metric(
+                label=f"Utilidad Bruta ({tipo_filtro})",
+                value=f"${total_revenue:,.2f}",
+            )
+        with col3:
+            st.metric(
+                label=f"Rebate/Costo Broker ({tipo_filtro})",
+                value=f"${total_rebate:,.2f}",
+            )
 
-        fig = px.bar(
-            df_melted,
-            x="Mes_Periodo",
+    # 3. Preparamos los datos diarios para la gráfica de dos líneas
+    df_filtrado["Fecha_Dia"] = pd.to_datetime(df_filtrado[date_column], errors="coerce").dt.date
+    df_filtrado["Revenue Kamina"] = df_filtrado["Descuento"] * 0.80
+    df_filtrado["Rebate Broker"] = df_filtrado["Descuento"] * 0.20
+
+    # Agrupamos por día cada concepto
+    df_rev_grouped = df_filtrado.groupby("Fecha_Dia")["Revenue Kamina"].sum().reset_index()
+    df_rev_grouped["Tipo_Flujo"] = "Revenue Kamina (80%)"
+    df_rev_grouped["Monto"] = df_rev_grouped["Revenue Kamina"]
+
+    df_reb_grouped = df_filtrado.groupby("Fecha_Dia")["Rebate Broker"].sum().reset_index()
+    df_reb_grouped["Tipo_Flujo"] = "Rebate Broker (20%)"
+    df_reb_grouped["Monto"] = df_reb_grouped["Rebate Broker"]
+
+    # Unimos para Plotly
+    df_final = pd.concat([df_rev_grouped[["Fecha_Dia", "Tipo_Flujo", "Monto"]], 
+                          df_reb_grouped[["Fecha_Dia", "Tipo_Flujo", "Monto"]]])
+    df_final = df_final.dropna(subset=["Fecha_Dia"])
+    df_final = df_final.sort_values(by="Fecha_Dia")
+
+    if not df_final.empty:
+        df_final["Fecha_Str"] = pd.to_datetime(df_final["Fecha_Dia"]).dt.strftime("%Y-%m-%d")
+
+        fig = px.line(
+            df_final,
+            x="Fecha_Str",
             y="Monto",
-            color="Concepto",
-            title=f"Evolución Mensual: Revenue vs Rebate ({tipo_filtro})",
-            labels={"Mes_Periodo": "Mes", "Monto": "Monto ($)", "Concepto": "Distribución"},
+            color="Tipo_Flujo",
+            markers=True,
+            title=f"Revenue vs Rebate - Vista Diaria ({tipo_filtro})",
+            labels={"Fecha_Str": "Día", "Monto": "Monto ($)", "Tipo_Flujo": "Concepto"},
             color_discrete_map={
-                "Revenue Kamina": "#1f77b4",  # Azul profesional
-                "Rebate Broker": "#ff7f0e"     # Naranja / ámbar
-            },
-            barmode="stack"
+                "Revenue Kamina": "#0047AB",  
+                "Rebate Broker": "#E4A0F8"    
+            }
         )
 
         fig.update_traces(
-            hovertemplate="Mes: %{x}<br>%{customdata}: $%{y:,.2f}<extra></extra>",
+            line=dict(width=2),
+            marker=dict(size=6),
+            hovertemplate="Día: %{x}<br>Monto: $%{y:,.2f}<extra></extra>",
         )
 
         fig.update_layout(
-            xaxis_title="Mes",
-            yaxis_title="Monto Total ($)",
+            xaxis_title="Día",
+            yaxis_title="Monto ($)",
             plot_bgcolor="rgba(0,0,0,0)",
             xaxis_tickangle=-45,
             legend_title="Concepto"
@@ -360,4 +443,246 @@ def render_grafica_revenue_rebate_dual(df, date_column="Fecha de Dispersión"):
 
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.warning("No hay datos disponibles para mostrar la distribución mensual en este rango.")
+        st.warning("No hay datos diarios disponibles para graficar en este rango.")
+
+
+def render_curva_clientes_activos_diarios(df, date_column="Fecha de Dispersión", columna_cliente="Cliente"):
+    """
+    Renderiza 3 tarjetas (Clientes Únicos, Total de Facturas/Dispersiones y Ticket Promedio) 
+    y una gráfica de líneas diaria con la cantidad de clientes únicos operando por día.
+    """
+    st.markdown("---")
+    st.subheader("📈 Actividad de Clientes y Dispersiones por Día")
+
+    if date_column not in df.columns or columna_cliente not in df.columns:
+        st.warning(f"Faltan columnas necesarias ('{date_column}' o '{columna_cliente}') en los datos.")
+        return
+
+    # 1. Aplicamos el filtro de tiempo general
+    df_filtrado, tipo_filtro = render_filtros_tiempo(
+        df, 
+        sufijo_key="clientes_activos_diarios", 
+        date_column=date_column
+    )
+
+    if df_filtrado.empty:
+        st.warning("No hay datos disponibles para el filtro seleccionado.")
+        return
+
+    # 2. Cálculos para las TRES tarjetas superiores basados estrictamente en el filtro
+    total_clientes_unicos = df_filtrado[columna_cliente].nunique()
+    
+    # Total de facturas / dispersiones (cada fila del df filtrado representa una operación/factura)
+    total_facturas = len(df_filtrado)
+    
+    # Ticket promedio (calculado sobre la columna de monto dispersado o equivalente, validamos cuál existe)
+    col_monto_ticket = "Monto Dispersado" if "Monto Dispersado" in df_filtrado.columns else ("Monto a Recibir" if "Monto a Recibir" in df_filtrado.columns else None)
+    
+    if col_monto_ticket and total_facturas > 0:
+        ticket_promedio = df_filtrado[col_monto_ticket].sum() / total_facturas
+    else:
+        ticket_promedio = 0.0
+
+    # Mostramos las 3 tarjetas en columnas separadas
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(
+            label=f"Clientes Únicos ({tipo_filtro})",
+            value=f"{total_clientes_unicos:,}",
+        )
+    with col2:
+        st.metric(
+            label=f"Facturas / Dispersiones ({tipo_filtro})",
+            value=f"{total_facturas:,}",
+        )
+    with col3:
+        st.metric(
+            label=f"Ticket Promedio ({tipo_filtro})",
+            value=f"${ticket_promedio:,.2f}",
+        )
+
+    # 3. Agrupación diaria por conteo de clientes únicos para la gráfica
+    df_filtrado["Fecha_Dia"] = pd.to_datetime(df_filtrado[date_column], errors="coerce").dt.date
+    df_agrupado = df_filtrado.groupby("Fecha_Dia")[columna_cliente].nunique().reset_index()
+    df_agrupado = df_agrupado.rename(columns={columna_cliente: "Cantidad_Clientes"})
+    df_agrupado = df_agrupado.dropna(subset=["Fecha_Dia"])
+    df_agrupado = df_agrupado.sort_values(by="Fecha_Dia")
+
+    if not df_agrupado.empty:
+        df_agrupado["Fecha_Str"] = pd.to_datetime(df_agrupado["Fecha_Dia"]).dt.strftime("%Y-%m-%d")
+
+        # 4. Gráfica de líneas con Plotly
+        fig = px.line(
+            df_agrupado,
+            x="Fecha_Str",
+            y="Cantidad_Clientes",
+            markers=True,
+            title=f"Evolución Diaria de Clientes Activos ({tipo_filtro})",
+            labels={"Fecha_Str": "Día", "Cantidad_Clientes": "Número de Clientes"},
+            color_discrete_sequence=["#FF1493"] # Verde corporativo
+        )
+
+        fig.update_traces(
+            line=dict(width=2),
+            marker=dict(size=6),
+            hovertemplate="Día: %{x}<br>Clientes operando: %{y:,}<extra></extra>",
+        )
+
+        fig.update_layout(
+            xaxis_title="Día",
+            yaxis_title="Clientes Únicos",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis_tickangle=-45
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("No hay datos diarios de clientes para mostrar en este rango.")
+
+
+def render_curva_revenue_vs_intereses(df_consolidado, df_deuda, date_column_conv="Fecha de Dispersión", date_column_deuda="Mes"):
+    """
+    Renderiza filtros de tiempo, tarjetas dinámicas con la fórmula exacta de fondeo/disponible
+    y la gráfica comparativa entre Revenue Kamina e Intereses Cobrados.
+    """
+    st.markdown("---")
+    st.subheader("📈 Evolución y Análisis: Revenue Kamina vs. Intereses Cobrados")
+
+    if df_consolidado is None:
+        st.warning("Faltan datos en el consolidado para generar la vista.")
+        return
+
+    # 1. Aplicamos los filtros de tiempo generales utilizando la fecha de dispersión
+    df_filtrado, tipo_filtro = render_filtros_tiempo(
+        df_consolidado, 
+        sufijo_key="revenue_vs_intereses_filtro", 
+        date_column=date_column_conv
+    )
+
+    if df_filtrado.empty:
+        st.warning("No hay datos disponibles para el filtro seleccionado.")
+        return
+
+    # 2. CÁLCULO DE LAS TARJETAS SUPERIORES CON LAS REGLAS EXACTAS
+    
+    # A) Capital / Fondeo Total: Suma de la columna "Capital" de df_deuda
+    total_capital_fondeo = 0.0
+    total_intereses_banco = 0.0
+    if df_deuda is not None and not df_deuda.empty:
+        if "Capital" in df_deuda.columns:
+            total_capital_fondeo = pd.to_numeric(df_deuda["Capital"], errors="coerce").fillna(0).sum()
+        if "Intereses cobrados" in df_deuda.columns:
+            total_intereses_banco = pd.to_numeric(df_deuda["Intereses cobrados"], errors="coerce").fillna(0).sum()
+
+    # B) Total Dispersado (en base al filtro de tiempo actual)
+    col_monto_disp = "Monto Dispersado" 
+    total_dispersado_periodo = df_filtrado[col_monto_disp].sum() if col_monto_disp else 0.0
+
+    # C) Capital Recuperado (PAID) vs Capital en la Calle (To be paid) usando el df_consolidado
+    col_pago_kamina = "Monto a Pagar a Kamina"
+    col_estatus_pago = "Estatus Pago a Kamina"
+    
+    capital_recuperado_paid = 0.0
+    capital_en_calle_tobepaid = 0.0
+
+    if col_pago_kamina in df_consolidado.columns and col_estatus_pago in df_consolidado.columns:
+        df_estatus_limpio = df_consolidado.copy()
+        df_estatus_limpio[col_estatus_pago] = df_estatus_limpio[col_estatus_pago].astype(str).str.strip()
+        
+        # Capital Recuperado (PAID) - Global o filtrado según prefieras (aquí tomamos el global o del periodo)
+        mask_paid = df_estatus_limpio[col_estatus_pago] == "PAID"
+        capital_recuperado_paid = pd.to_numeric(df_estatus_limpio.loc[mask_paid, col_pago_kamina], errors="coerce").fillna(0).sum()
+
+        # Capital Activo en la Calle (To be paid)
+        mask_tobepaid = df_estatus_limpio[col_estatus_pago] == "To be paid"
+        capital_en_calle_tobepaid = pd.to_numeric(df_estatus_limpio.loc[mask_tobepaid, col_pago_kamina], errors="coerce").fillna(0).sum()
+
+    # FÓRMULA DE DINERO DISPONIBLE:
+    # (Fondeo Total Autorizado [Capital de df_deuda] + Capital Recuperado [PAID]) - (Capital en la Calle [To be paid] + Intereses Pagados al Banco)
+    dinero_disponible_real = total_capital_fondeo + capital_recuperado_paid - capital_en_calle_tobepaid - total_intereses_banco
+
+    # Mostramos las 3 tarjetas solicitadas arriba de la gráfica con sus valores reales
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(
+            label="Capital / Fondeo Total (Banco)",
+            value=f"${total_capital_fondeo:,.2f}",
+        )
+    with col2:
+        st.metric(
+            label=f"Total Dispersado ({tipo_filtro})",
+            value=f"${total_dispersado_periodo:,.2f}",
+        )
+    with col3:
+        st.metric(
+            label="Dinero Disponible Real",
+            value=f"$En proceso...",
+            delta=f"En calle: ${capital_en_calle_tobepaid:,.2f}",
+            delta_color="off"
+        )
+
+    # 3. Procesar Revenue Kamina agrupado por Mes (usando el df ya filtrado)
+    df_c = df_filtrado.copy()
+    if "Descuento" in df_c.columns and date_column_conv in df_c.columns:
+        df_c["Revenue_Kamina"] = pd.to_numeric(df_c["Descuento"], errors="coerce").fillna(0) * 0.80
+        df_c["Mes_Periodo"] = pd.to_datetime(df_c[date_column_conv], errors="coerce").dt.to_period("M")
+        df_c_grouped = df_c.groupby("Mes_Periodo")["Revenue_Kamina"].sum().reset_index()
+    else:
+        df_c_grouped = pd.DataFrame(columns=["Mes_Periodo", "Revenue_Kamina"])
+
+    # 4. Procesar Intereses Cobrados desde el df_deuda agrupado por Mes
+    df_d_grouped = pd.DataFrame(columns=["Mes_Periodo", "Intereses_Cobrados"])
+    if df_deuda is not None and not df_deuda.empty:
+        df_d = df_deuda.copy()
+        col_interes = "Intereses cobrados"
+        if col_interes in df_d.columns and date_column_deuda in df_d.columns:
+            df_d[col_interes] = pd.to_numeric(df_d[col_interes], errors="coerce").fillna(0)
+            df_d["Mes_Periodo"] = pd.to_datetime(df_d[date_column_deuda], errors="coerce").dt.to_period("M")
+            df_d_grouped = df_d.groupby("Mes_Periodo")[col_interes].sum().reset_index()
+            df_d_grouped = df_d_grouped.rename(columns={col_interes: "Intereses_Cobrados"})
+
+    # 5. Fusionar ambos DataFrames por el periodo mensual
+    if not df_c_grouped.empty:
+        if not df_d_grouped.empty:
+            df_final = pd.merge(df_c_grouped, df_d_grouped, on="Mes_Periodo", how="outer").fillna(0)
+        else:
+            df_final = df_c_grouped.copy()
+            df_final["Intereses_Cobrados"] = 0.0
+            
+        df_final = df_final.sort_values(by="Mes_Periodo")
+        df_final["Mes_Str"] = df_final["Mes_Periodo"].astype(str)
+
+        # 6. Crear la gráfica de líneas múltiples mensual con Plotly Express
+        fig = px.line(
+            df_final,
+            x="Mes_Str",
+            y=["Revenue_Kamina", "Intereses_Cobrados"],
+            markers=True,
+            title=f"Comparativa Mensual: Revenue Kamina vs Intereses Cobrados ({tipo_filtro})",
+            labels={"Mes_Str": "Mes", "value": "Monto ($)", "variable": "Concepto"},
+            color_discrete_map={
+                "Revenue_Kamina": "#0047AB",       
+                "Intereses_Cobrados": "#FF8C00"    
+            }
+        )
+
+        new_names = {"Revenue_Kamina": "Revenue Kamina (80%)", "Intereses_Cobrados": "Intereses Cobrados"}
+        fig.for_each_trace(lambda t: t.update(name = new_names.get(t.name, t.name)))
+
+        fig.update_traces(
+            line=dict(width=2),
+            marker=dict(size=6),
+            hovertemplate="Mes: %{x}<br>Monto: $%{y:,.2f}<extra></extra>",
+        )
+
+        fig.update_layout(
+            xaxis_title="Mes",
+            yaxis_title="Monto ($)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis_tickangle=-45,
+            legend_title="Métrica"
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("No hay suficientes datos mensuales para graficar en este rango.")
