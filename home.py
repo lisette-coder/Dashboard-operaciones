@@ -1,99 +1,129 @@
 import streamlit as st
-from datetime import datetime
 
-def verificar_credenciales(usuario, password):
-    # Puedes definir aquí tus usuarios o usar st.secrets para mayor seguridad en el deploy
-    usuarios_permitidos = {
-        "admin": "kamina2026",
-    }
-    
-    if usuario in usuarios_permitidos and usuarios_permitidos[usuario] == password:
-        return True
-    return False
 
-def render_login():
-    st.markdown("---")
-    col1, col2, col3 = st.columns([1, 2, 1])
+# def verificar_credenciales(usuario, password):
+#     # Puedes definir aquí tus usuarios o usar st.secrets para mayor seguridad en el deploy
+#     usuarios_permitidos = {
+#         "admin": "kamina2026",
+#     }
     
-    with col2:
-        st.subheader("🔐 Acceso al Portal Financiero")
-        st.markdown("Por favor, ingresa tus credenciales para continuar.")
+#     if usuario in usuarios_permitidos and usuarios_permitidos[usuario] == password:
+#         return True
+#     return False
+
+# def render_login():
+#     st.markdown("---")
+#     col1, col2, col3 = st.columns([1, 2, 1])
+    
+#     with col2:
+#         st.subheader("🔐 Acceso al Portal Financiero")
+#         st.markdown("Por favor, ingresa tus credenciales para continuar.")
         
-        with st.form("form_login"):
-            usuario = st.text_input("Usuario")
-            password = st.text_input("Contraseña", type="password")
-            submit = st.form_submit_button("Iniciar Sesión")
+#         with st.form("form_login"):
+#             usuario = st.text_input("Usuario")
+#             password = st.text_input("Contraseña", type="password")
+#             submit = st.form_submit_button("Iniciar Sesión")
             
-            if submit:
-                if verificar_credenciales(usuario, password):
-                    st.session_state.autenticado = True
-                    st.session_state.usuario_actual = usuario
-                    st.success("¡Acceso concedido! Redirigiendo...")
-                    st.rerun()
-                else:
-                    st.error("Usuario o contraseña incorrectos.")
+#             if submit:
+#                 if verificar_credenciales(usuario, password):
+#                     st.session_state.autenticado = True
+#                     st.session_state.usuario_actual = usuario
+#                     st.success("¡Acceso concedido! Redirigiendo...")
+#                     st.rerun()
+#                 else:
+#                     st.error("Usuario o contraseña incorrectos.")
 
 
 
-# 1. Configuración inicial de la página
-st.set_page_config(
-    page_title="Portal Factoraje Solistica", page_icon="🏢", layout="wide"
+# # 1. Configuración inicial de la página
+# st.set_page_config(
+#     page_title="Portal Factoraje Solistica", page_icon="🏢", layout="wide"
+# )
+
+# # 2. Inicializar el estado de autenticación en la sesión
+# if "autenticado" not in st.session_state:
+#     st.session_state.autenticado = False
+
+# # Importamos la función de login (si la pusiste en auth.py o la tienes en el mismo archivo)
+# # from auth import render_login
+
+# # 3. Control de acceso principal
+# if not st.session_state.autenticado:
+#     st.title("🏢 Portal Operativo y Financiero - Kamina Credit")
+#     # Mostramos la pantalla de login si NO está autenticado
+#     render_login()
+    
+# else:
+#     import streamlit as st
+
+# --- CONTENIDO NORMAL DE TU HOME SI YA ESTÁ LOGUEADO ---
+
+# Banner Header Principal
+st.markdown(
+    """
+    <div style="background-color: #0E1117; padding: 22px; border-radius: 12px; margin-bottom: 25px; border-left: 6px solid #0047AB;">
+        <h1 style="color: white; margin:0; padding:0; font-size: 2.2rem;">🏢 Portal Operativo y Financiero</h1>
+        <p style="color: #A0AAB2; margin-top: 6px; font-size: 1.05rem;">Kamina Credit &bull; Sistema Integral de Análisis y Control</p>
+    </div>
+    """, 
+    unsafe_allow_html=True
 )
 
-# 2. Inicializar el estado de autenticación en la sesión
-if "autenticado" not in st.session_state:
-    st.session_state.autenticado = False
+st.markdown("Bienvenid@ al sistema integral de análisis. Utiliza el **menú lateral izquierdo** para navegar entre los módulos especializados:")
 
-# Importamos la función de login (si la pusiste en auth.py o la tienes en el mismo archivo)
-# from auth import render_login
+st.write("") # Espacio visual
 
-# 3. Control de acceso principal
-if not st.session_state.autenticado:
-    st.title("🏢 Portal Operativo y Financiero - Kamina Credit")
-    # Mostramos la pantalla de login si NO está autenticado
-    render_login()
-    
-else:
-    # --- CONTENIDO NORMAL DE TU HOME SI YA ESTÁ LOGUEADO ---
-    st.title("🏢 Portal Operativo y Financiero - Kamina Credit")
-    st.markdown(
-        f"Bienvenida al sistema integral de análisis, **{st.session_state.get('usuario_actual', 'Usuario')}**. "
-        "Utiliza el **menú lateral izquierdo** para navegar entre los diferentes módulos especializados:"
-    )
+# Grilla de 2 columnas x 2 filas para las tarjetas de módulos
+col_a, col_b = st.columns(2)
 
-    st.markdown("---")
+# MÓDULOS ACTIVOS
+with col_a:
+    with st.container(border=True):
+        st.subheader("📊 Datos Generales")
+        st.caption("Visualización global de KPIs clave, filtros avanzados y gráficas dinámicas.")
+        st.markdown("""
+        **Incluye 5 secciones clave:**
+        * 🚀 **Dispersiones**
+        * 👥 **Cartera de Clientes**
+        * 💰 **Ingresos**
+        * 📋 **Resumen de Clientes**
+        * 🏦 **Capital**
+        """)
 
-    col1, col2 = st.columns(2)
+with col_b:
+    with st.container(border=True):
+        st.subheader("💸 Clientes")
+        st.caption("Estrategia y análisis de segmentación de la cartera.")
+        st.markdown("""
+        **Funcionalidades principales:**
+        * 🎯 Identificación de clientes prioritarios.
+        * 📊 Segmentación por **ticket promedio**.
+        * 🔄 Análisis por **frecuencia de disposición**.
+        """)
 
-    with col1:
-      st.info(
-          "📊 **Datos Generales:** Visualización global de registros, filtros"
-          " dinámicos y tabla completa."
-      )
-      st.info(
-          "💸 **Dispersiones:** Análisis detallado de montos dispersados y"
-          " disposiciones."
-      )
+st.write("") # Espacio visual
 
-    with col2:
-      st.success(
-          "💳 **Cobranza:** Seguimiento de estatus de operación y control de"
-          " cartera."
-      )
-      st.success(
-          "📈 **Curva de Liquidación:** Comportamiento de colocación y tendencias"
-          " temporales."
-      )
+# MÓDULOS EN PREPARACIÓN
+col_c, col_d = st.columns(2)
 
-    st.markdown("---")
-    
-    # Botón opcional para cerrar sesión
-    if st.button("Cerrar Sesión"):
-        st.session_state.autenticado = False
-        st.rerun()
+with col_c:
+    with st.container(border=True):
+        st.subheader("🔮 Análisis Predictivos")
+        st.caption("Modelos avanzados de proyección de comportamientos y tendencias.")
+        st.warning("⚠️ **Módulo en preparación...**")
 
-    st.caption(
-        "💡 *Consejo:* Cualquier cambio que realices en tu archivo de Excel en"
-        " Google Drive se actualizará automáticamente en las páginas al recargar la"
-        " vista."
-    )
+with col_d:
+    with st.container(border=True):
+        st.subheader("🛡️ Riesgos")
+        st.caption("Evaluación de salud crediticia, mora y mitigación de pérdidas.")
+        st.warning("⚠️ **Módulo en preparación...**")
+
+st.divider()
+
+
+#  # Pie de página y cierre de sesión
+# col_user, col_logout = st.columns([3, 1])
+# with col_logout:
+#     if st.button("🚪 Cerrar Sesión", use_container_width=True, type="secondary"):
+#         st.session_state.autenticado = False
+#         st.rerun()
