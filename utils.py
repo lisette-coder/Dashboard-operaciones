@@ -1,5 +1,3 @@
-import io
-import requests
 from datetime import datetime
 import gdown
 import pandas as pd
@@ -542,123 +540,75 @@ def render_curva_clientes_activos_diarios(df, date_column="Fecha de Dispersión"
 
 def render_curva_revenue_vs_intereses(df_consolidado, df_deuda, date_column_conv="Fecha de Dispersión", date_column_deuda="Mes"):
     """
-    Renderiza filtros de tiempo, tarjetas dinámicas con la fórmula exacta de fondeo/disponible
-    y la gráfica comparativa entre Revenue Kamina e Intereses Cobrados.
+    Renderiza tarjetas dinámicas y la gráfica comparativa (Revenue vs Intereses)
+    utilizando la totalidad de los datos (sin filtros de tiempo).
     """
     st.markdown("---")
     st.subheader("📈 Evolución y Análisis: Revenue Kamina vs. Intereses Cobrados")
 
-    if df_consolidado is None:
+    if df_consolidado is None or df_consolidado.empty:
         st.warning("Faltan datos en el consolidado para generar la vista.")
         return
 
-    # 1. Aplicamos los filtros de tiempo generales utilizando la fecha de dispersión
-    df_filtrado, tipo_filtro = render_filtros_tiempo(
-        df_consolidado, 
-        sufijo_key="revenue_vs_intereses_filtro", 
-        date_column=date_column_conv
-    )
-
-    if df_filtrado.empty:
-        st.warning("No hay datos disponibles para el filtro seleccionado.")
-        return
-
-    # 2. CÁLCULO DE LAS TARJETAS SUPERIORES CON LAS REGLAS EXACTAS
-    
-    # A) Capital / Fondeo Total: Suma de la columna "Capital" de df_deuda
+    # 1. CÁLCULO DE LAS TARJETAS SUPERIORES
     total_capital_fondeo = 0.0
-    total_intereses_banco = 0.0
-    if df_deuda is not None and not df_deuda.empty:
-        if "Capital" in df_deuda.columns:
-            total_capital_fondeo = pd.to_numeric(df_deuda["Capital"], errors="coerce").fillna(0).sum()
-        if "Intereses cobrados" in df_deuda.columns:
-            total_intereses_banco = pd.to_numeric(df_deuda["Intereses cobrados"], errors="coerce").fillna(0).sum()
+    if df_deuda is not None and not df_deuda.empty and "Solicitudes Capital" in df_deuda.columns:
+        total_capital_fondeo = pd.to_numeric(df_deuda["Solicitudes Capital"], errors="coerce").fillna(0).sum()
 
-    # B) Total Dispersado (en base al filtro de tiempo actual)
-    col_monto_disp = "Monto Dispersado" 
-    total_dispersado_periodo = df_filtrado[col_monto_disp].sum() if col_monto_disp else 0.0
-
-    # C) Capital Recuperado (PAID) vs Capital en la Calle (To be paid) usando el df_consolidado
     col_pago_kamina = "Monto a Pagar a Kamina"
     col_estatus_pago = "Estatus Pago a Kamina"
-    
-    capital_recuperado_paid = 0.0
     capital_en_calle_tobepaid = 0.0
 
     if col_pago_kamina in df_consolidado.columns and col_estatus_pago in df_consolidado.columns:
-        df_estatus_limpio = df_consolidado.copy()
-        df_estatus_limpio[col_estatus_pago] = df_estatus_limpio[col_estatus_pago].astype(str).str.strip()
-        
-        # Capital Recuperado (PAID) - Global o filtrado según prefieras (aquí tomamos el global o del periodo)
-        mask_paid = df_estatus_limpio[col_estatus_pago] == "PAID"
-        capital_recuperado_paid = pd.to_numeric(df_estatus_limpio.loc[mask_paid, col_pago_kamina], errors="coerce").fillna(0).sum()
+        mask_tobepaid = df_consolidado[col_estatus_pago].astype(str).str.strip() == "To be paid"
+        capital_en_calle_tobepaid = pd.to_numeric(df_consolidado.loc[mask_tobepaid, col_pago_kamina], errors="coerce").fillna(0).sum()
 
-        # Capital Activo en la Calle (To be paid)
-        mask_tobepaid = df_estatus_limpio[col_estatus_pago] == "To be paid"
-        capital_en_calle_tobepaid = pd.to_numeric(df_estatus_limpio.loc[mask_tobepaid, col_pago_kamina], errors="coerce").fillna(0).sum()
+    # Dinero Disponible Real
+    capital_recuperado_paid = total_capital_fondeo - capital_en_calle_tobepaid 
 
-    # FÓRMULA DE DINERO DISPONIBLE:
-    # (Fondeo Total Autorizado [Capital de df_deuda] + Capital Recuperado [PAID]) - (Capital en la Calle [To be paid] + Intereses Pagados al Banco)
-    dinero_disponible_real = total_capital_fondeo + capital_recuperado_paid - capital_en_calle_tobepaid - total_intereses_banco
-
-    # Mostramos las 3 tarjetas solicitadas arriba de la gráfica con sus valores reales
+    # Métricas superiores
     col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric(
-            label="Capital / Fondeo Total (Banco)",
-            value=f"${total_capital_fondeo:,.2f}",
-        )
-    with col2:
-        st.metric(
-            label=f"Total Dispersado ({tipo_filtro})",
-            value=f"${total_dispersado_periodo:,.2f}",
-        )
-    with col3:
-        st.metric(
-            label="Dinero Disponible Real",
-            value=f"$En proceso...",
-            delta=f"En calle: ${capital_en_calle_tobepaid:,.2f}",
-            delta_color="off"
-        )
+    col1.metric("Capital / Fondeo Total (Banco)", f"${total_capital_fondeo:,.2f}")
+    col2.metric("Capital utilizado", f"${capital_en_calle_tobepaid:,.2f}")
+    col3.metric("Dinero Disponible Real", f"${capital_recuperado_paid:,.2f}", delta_color="off")
 
-    # 3. Procesar Revenue Kamina agrupado por Mes (usando el df ya filtrado)
-    df_c = df_filtrado.copy()
-    if "Descuento" in df_c.columns and date_column_conv in df_c.columns:
-        df_c["Revenue_Kamina"] = pd.to_numeric(df_c["Descuento"], errors="coerce").fillna(0) * 0.80
-        df_c["Mes_Periodo"] = pd.to_datetime(df_c[date_column_conv], errors="coerce").dt.to_period("M")
-        df_c_grouped = df_c.groupby("Mes_Periodo")["Revenue_Kamina"].sum().reset_index()
-    else:
-        df_c_grouped = pd.DataFrame(columns=["Mes_Periodo", "Revenue_Kamina"])
+    # 2. PROCESAR REVENUE KAMINA (Sobre df_consolidado completo)
+    df_c_grouped = pd.DataFrame(columns=["Mes_Periodo", "Revenue_Kamina"])
+    if "Descuento" in df_consolidado.columns and date_column_conv in df_consolidado.columns:
+        rev_temp = df_consolidado[[date_column_conv, "Descuento"]].copy()
+        rev_temp["Revenue_Kamina"] = pd.to_numeric(rev_temp["Descuento"], errors="coerce").fillna(0) * 0.80
+        rev_temp["Mes_Periodo"] = pd.to_datetime(rev_temp[date_column_conv], errors="coerce").dt.to_period("M")
+        
+        df_c_grouped = rev_temp.groupby("Mes_Periodo", as_index=False)["Revenue_Kamina"].sum()
 
-    # 4. Procesar Intereses Cobrados desde el df_deuda agrupado por Mes
+    # 3. PROCESAR INTERESES COBRADOS
     df_d_grouped = pd.DataFrame(columns=["Mes_Periodo", "Intereses_Cobrados"])
     if df_deuda is not None and not df_deuda.empty:
-        df_d = df_deuda.copy()
         col_interes = "Intereses cobrados"
-        if col_interes in df_d.columns and date_column_deuda in df_d.columns:
-            df_d[col_interes] = pd.to_numeric(df_d[col_interes], errors="coerce").fillna(0)
-            df_d["Mes_Periodo"] = pd.to_datetime(df_d[date_column_deuda], errors="coerce").dt.to_period("M")
-            df_d_grouped = df_d.groupby("Mes_Periodo")[col_interes].sum().reset_index()
-            df_d_grouped = df_d_grouped.rename(columns={col_interes: "Intereses_Cobrados"})
+        if col_interes in df_deuda.columns and date_column_deuda in df_deuda.columns:
+            int_temp = df_deuda[[date_column_deuda, col_interes]].copy()
+            int_temp["Intereses_Cobrados"] = pd.to_numeric(int_temp[col_interes], errors="coerce").fillna(0)
+            int_temp["Mes_Periodo"] = pd.to_datetime(int_temp[date_column_deuda], errors="coerce").dt.to_period("M")
+            
+            df_d_grouped = int_temp.groupby("Mes_Periodo", as_index=False)["Intereses_Cobrados"].sum()
 
-    # 5. Fusionar ambos DataFrames por el periodo mensual
+    # 4. FUSIONAR Y GRAFICAR
     if not df_c_grouped.empty:
         if not df_d_grouped.empty:
             df_final = pd.merge(df_c_grouped, df_d_grouped, on="Mes_Periodo", how="outer").fillna(0)
         else:
-            df_final = df_c_grouped.copy()
+            df_final = df_c_grouped
             df_final["Intereses_Cobrados"] = 0.0
-            
+
         df_final = df_final.sort_values(by="Mes_Periodo")
         df_final["Mes_Str"] = df_final["Mes_Periodo"].astype(str)
 
-        # 6. Crear la gráfica de líneas múltiples mensual con Plotly Express
         fig = px.line(
             df_final,
             x="Mes_Str",
             y=["Revenue_Kamina", "Intereses_Cobrados"],
             markers=True,
-            title=f"Comparativa Mensual: Revenue Kamina vs Intereses Cobrados ({tipo_filtro})",
+            title="Comparativa Mensual: Revenue Kamina vs Intereses Cobrados",
             labels={"Mes_Str": "Mes", "value": "Monto ($)", "variable": "Concepto"},
             color_discrete_map={
                 "Revenue_Kamina": "#0047AB",       
@@ -667,7 +617,7 @@ def render_curva_revenue_vs_intereses(df_consolidado, df_deuda, date_column_conv
         )
 
         new_names = {"Revenue_Kamina": "Revenue Kamina (80%)", "Intereses_Cobrados": "Intereses Cobrados"}
-        fig.for_each_trace(lambda t: t.update(name = new_names.get(t.name, t.name)))
+        fig.for_each_trace(lambda t: t.update(name=new_names.get(t.name, t.name)))
 
         fig.update_traces(
             line=dict(width=2),
@@ -685,4 +635,4 @@ def render_curva_revenue_vs_intereses(df_consolidado, df_deuda, date_column_conv
 
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.warning("No hay suficientes datos mensuales para graficar en este rango.")
+        st.warning("No hay suficientes datos mensuales para graficar.")
