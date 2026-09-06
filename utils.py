@@ -13,7 +13,7 @@ DRIVE_URL = "https://docs.google.com/spreadsheets/d/1NaIOHho98ZpRMfOoyxQFW6HeKva
 OUTPUT_FILE = "temp_solistica.xlsx"
 
 # Función interna de apoyo para descargar una sola vez
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=1800, show_spinner="Cargando reporte consolidado...")
 def _download_drive_file():
     try:
         if "/d/" in DRIVE_URL:
@@ -26,7 +26,7 @@ def _download_drive_file():
         return None
 
 # Mantiene exactamente el nombre y comportamiento de tus variables/funciones
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=1800, show_spinner="Cargando reporte consolidado...")
 def load_data_consolidado():
     archivo = _download_drive_file()
     if archivo and os.path.exists(archivo):
@@ -38,7 +38,7 @@ def load_data_consolidado():
             return None
     return None
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner="Cargando reporte consolidado...")
 def load_data_deuda():
     archivo = _download_drive_file()
     if archivo and os.path.exists(archivo):
@@ -107,7 +107,8 @@ def render_filtros_tiempo(df, sufijo_key, date_column="Fecha de Dispersión"):
     with col_f1:
         tipo_filtro = st.radio(
             "Filtrar por:",
-            ["Rango de Meses", "Mes Específico", "Año Completo"],
+            ["Año Completo","Rango de Meses", "Mes Específico"],
+            index=0,
             key=f"radio_tiempo_{sufijo_key}",
         )
 

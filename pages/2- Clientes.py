@@ -17,7 +17,7 @@ st.markdown(
 )
 
 # Cargar datos desde utils
-with st.spinner("Cargando datos desde Google Drive..."):
+with st.spinner("Cargando datos..."):
     df = load_data_consolidado()
 
 if df is None or df.empty:
@@ -27,7 +27,9 @@ if df is None or df.empty:
 # Detectar columnas necesarias
 col_proveedor = "Proveedor"
 col_monto = "Monto Dispersado"
-col_rfc = next((c for c in df.columns if "RFC" in c.upper()), None)
+
+# Búsqueda flexible de la columna RFC Proveedor
+col_rfc = next((c for c in df.columns if "RFC" in c.upper() and "PROVEEDOR" in c.upper()), None)
 
 if col_proveedor not in df.columns or col_monto not in df.columns:
     st.error(
@@ -41,11 +43,12 @@ df_clean = df.copy()
 df_clean[col_monto] = pd.to_numeric(df_clean[col_monto], errors="coerce")
 df_clean = df_clean.dropna(subset=[col_proveedor, col_monto])
 
+# Agrupación y cálculo de métricas
 if col_rfc:
     df_clean[col_rfc] = df_clean[col_rfc].fillna("N/A").astype(str)
-
-# Agrupación y cálculo de métricas generales
-group_cols = [col_proveedor] if not col_rfc else [col_rfc, col_proveedor]
+    group_cols = [col_rfc, col_proveedor]
+else:
+    group_cols = [col_proveedor]
 
 df_resumen = df_clean.groupby(group_cols).agg(
     Ticket_Promedio=(col_monto, "mean"),
@@ -53,10 +56,11 @@ df_resumen = df_clean.groupby(group_cols).agg(
     Monto_Total=(col_monto, "sum")
 ).reset_index()
 
-if not col_rfc:
-    df_resumen["RFC Proveedor"] = "N/A"
-else:
+# Normalización de nombres de columnas para la vista
+if col_rfc:
     df_resumen.rename(columns={col_rfc: "RFC Proveedor"}, inplace=True)
+else:
+    df_resumen["RFC Proveedor"] = "N/A"
 
 df_resumen.rename(columns={col_proveedor: "Proveedor"}, inplace=True)
 
@@ -65,7 +69,7 @@ df_resumen.rename(columns={col_proveedor: "Proveedor"}, inplace=True)
 # SECCIÓN 1: 💎 TOP 20 — TICKET PROMEDIO MÁS ALTO
 # =============================================================================
 st.markdown("---")
-st.header("⭐ TOP 20 — TICKET PROMEDIO MÁS ALTO")
+st.header("💎 TOP 20 — TICKET PROMEDIO MÁS ALTO")
 
 df_ticket = df_resumen.sort_values(by="Ticket_Promedio", ascending=False).head(20).copy()
 df_ticket.insert(0, "Rank", range(1, len(df_ticket) + 1))
@@ -81,22 +85,21 @@ with kpi3:
 
 st.write("") # Espaciador
 
-# Tabla interactiva formateada tipo Dashboard
+# Copia para renderizado de la tabla con formato directo de moneda
+df_ticket_view = df_ticket.copy()
+df_ticket_view["Ticket promedio"] = df_ticket_view["Ticket_Promedio"].apply(lambda x: f"${x:,.2f}")
+df_ticket_view["Monto total dispersado"] = df_ticket_view["Monto_Total"].apply(lambda x: f"${x:,.2f}")
+
 st.dataframe(
-    df_ticket,
-    column_order=["Rank", "RFC Proveedor", "Proveedor", "Ticket_Promedio", "Dispersiones", "Monto_Total"],
+    df_ticket_view,
+    column_order=["Rank", "RFC Proveedor", "Proveedor", "Ticket promedio", "Dispersiones", "Monto total dispersado"],
     column_config={
         "Rank": st.column_config.NumberColumn("Rank", width="small"),
         "RFC Proveedor": st.column_config.TextColumn("RFC Proveedor", width="medium"),
         "Proveedor": st.column_config.TextColumn("Proveedor", width="large"),
-        "Ticket_Promedio": st.column_config.ProgressColumn(
-            "Ticket promedio",
-            format="$%,.2f",
-            min_value=0,
-            max_value=float(df_ticket["Ticket_Promedio"].max()),
-        ),
+        "Ticket promedio": st.column_config.TextColumn("Ticket promedio", width="medium"),
         "Dispersiones": st.column_config.NumberColumn("Dispersiones", format="%d"),
-        "Monto_Total": st.column_config.NumberColumn("Monto total dispersado", format="$%,.2f"),
+        "Monto total dispersado": st.column_config.TextColumn("Monto total dispersado", width="medium"),
     },
     hide_index=True,
     use_container_width=True,
@@ -108,7 +111,7 @@ st.dataframe(
 # SECCIÓN 2: 🔄 TOP 20 — MAYOR FRECUENCIA DE DISPERSIÓN
 # =============================================================================
 st.markdown("---")
-st.header("⭐ TOP 20 — MAYOR FRECUENCIA DE DISPERSIÓN")
+st.header("🔄 TOP 20 — MAYOR FRECUENCIA DE DISPERSIÓN")
 
 df_frec = df_resumen.sort_values(by="Dispersiones", ascending=False).head(20).copy()
 df_frec.insert(0, "Rank", range(1, len(df_frec) + 1))
@@ -124,22 +127,21 @@ with frec3:
 
 st.write("") # Espaciador
 
-# Tabla interactiva formateada tipo Dashboard
+# Copia para renderizado de la tabla con formato directo de moneda
+df_frec_view = df_frec.copy()
+df_frec_view["Ticket promedio"] = df_frec_view["Ticket_Promedio"].apply(lambda x: f"${x:,.2f}")
+df_frec_view["Monto total dispersado"] = df_frec_view["Monto_Total"].apply(lambda x: f"${x:,.2f}")
+
 st.dataframe(
-    df_frec,
-    column_order=["Rank", "RFC Proveedor", "Proveedor", "Dispersiones", "Ticket_Promedio", "Monto_Total"],
+    df_frec_view,
+    column_order=["Rank", "RFC Proveedor", "Proveedor", "Dispersiones", "Ticket promedio", "Monto total dispersado"],
     column_config={
         "Rank": st.column_config.NumberColumn("Rank", width="small"),
         "RFC Proveedor": st.column_config.TextColumn("RFC Proveedor", width="medium"),
         "Proveedor": st.column_config.TextColumn("Proveedor", width="large"),
-        "Dispersiones": st.column_config.ProgressColumn(
-            "Dispersiones",
-            format="%d",
-            min_value=0,
-            max_value=int(df_frec["Dispersiones"].max()),
-        ),
-        "Ticket_Promedio": st.column_config.NumberColumn("Ticket promedio", format="$%,.2f"),
-        "Monto_Total": st.column_config.NumberColumn("Monto total dispersado", format="$%,.2f"),
+        "Dispersiones": st.column_config.NumberColumn("Dispersiones", format="%d"),
+        "Ticket promedio": st.column_config.TextColumn("Ticket promedio", width="medium"),
+        "Monto total dispersado": st.column_config.TextColumn("Monto total dispersado", width="medium"),
     },
     hide_index=True,
     use_container_width=True,

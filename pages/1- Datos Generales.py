@@ -21,8 +21,10 @@ with st.spinner("Procesando datos financieros y ejecutivos..."):
     df = load_data_consolidado() 
     df_deuda =load_data_deuda()
 
-
-#Asignacion de datos a las tarjetas
+# Función callback para actualización inmediata del estado
+def cambiar_vista(nueva_vista):
+    st.session_state.vista_activa = nueva_vista
+# Procesamiento y renders
 if df is not None and not df.empty:
     # Preparación local de fechas para las tarjetas superiores (YTD y Mes Actual)
     if "Descuento" in df.columns:
@@ -47,7 +49,6 @@ if df is not None and not df.empty:
         df_ytd = df
         df_mes_actual = df
 
-    
     # --- INICIALIZAR EL ESTADO DE LA VISTA ACTIVA ---
     if "vista_activa" not in st.session_state:
         st.session_state.vista_activa = "dispersiones"  # Vista por defecto
@@ -64,10 +65,9 @@ if df is not None and not df.empty:
         df_mes_actual, 
         "Monto Dispersado"
     )
-    if col1.button("Ver más", key="btn_disp"):
-        st.session_state.vista_activa = "dispersiones"
+    col1.button("Ver más", key="btn_disp", on_click=cambiar_vista, args=("dispersiones",))
 
-     # --- TARJETA 2: Cartera De clientes ---
+    # --- TARJETA 2: Cartera De clientes ---
     pago_kamina_col = "Monto a Pagar a Kamina"
     estatus_pago_col = "Estatus Pago a Kamina"
     col_fecha_pago = "Fecha Vencimiento"
@@ -84,7 +84,7 @@ if df is not None and not df.empty:
             fechas_convertidas = pd.to_datetime(df_cartera[col_fecha_pago], errors="coerce")
             fechas_pago = fechas_convertidas.dt.date
             
-            # Filtramos menor o igual a hoy (excluyendo los NaT para que no rompan la lógica)
+            # Filtramos menor o igual a hoy
             mask_hasta_hoy = (fechas_pago <= hoy) & (fechas_pago.notna())
             df_hasta_hoy = df_cartera[mask_hasta_hoy]
             total_acumulado_hasta_hoy = df_hasta_hoy[pago_kamina_col].sum()
@@ -97,12 +97,10 @@ if df is not None and not df.empty:
     else:
         col2.metric(label="Cartera Activa", value="Columnas no encontradas")
     
-    if col2.button("Ver más", key="btn_cart"):
-        st.session_state.vista_activa = "cartera"   
+    col2.button("Ver más", key="btn_cart", on_click=cambiar_vista, args=("cartera",))
 
     # --- TARJETA 3: Revenue / Rebate ---
     if "Descuento" in df.columns:
-        # YTD
         rev_ytd = df_ytd["Descuento"].sum() * 0.80
         reb_ytd = df_ytd["Descuento"].sum() * 0.20
         
@@ -110,19 +108,17 @@ if df is not None and not df.empty:
             label="Revenue Kamina",
             value=f"${rev_ytd:,.2f}",
             delta=f"Rebate: ${reb_ytd:,.2f}",
-            delta_color="off" # Mantiene un estilo limpio sin flechas de subida/bajada
+            delta_color="off"
         )
     else:
         col3.metric(label="Revenue / Rebate", value="Columna no encontrada")
 
-    if col3.button("Ver más", key="btn_desc"):
-            st.session_state.vista_activa = "descuentos"
+    col3.button("Ver más", key="btn_desc", on_click=cambiar_vista, args=("descuentos",))
 
     # --- TARJETA 4: Clientes Totales que han dispersado ---
-    columna_cliente = "RFC Proveedor" # Asegúrate de que este sea el nombre exacto de tu columna en el Excel
+    columna_cliente = "RFC Proveedor"
     if columna_cliente in df.columns:
         total_clientes_historico = df[columna_cliente].nunique()
-        # Opcional: calculamos cuántos operaron este año en el delta
         clientes_ytd = df_ytd[columna_cliente].nunique() if not df_ytd.empty else 0
         
         col4.metric(
@@ -134,35 +130,25 @@ if df is not None and not df.empty:
     else:
         col4.metric(label="Total Clientes", value="Columna no encontrada")
 
-    if col4.button("Ver más", key="btn_clientes"):
-        st.session_state.vista_activa = "clientes"
+    col4.button("Ver más", key="btn_clientes", on_click=cambiar_vista, args=("clientes",))
 
-    # --- TARJETA 5: Costo de Intereses (Nuevo KPI) ---
+    # --- TARJETA 5: Costo de Intereses ---
     col_mes_deuda = "Mes"       
     col_interes_deuda = "Intereses cobrados"  
     
     if df_deuda is not None and not df_deuda.empty and col_interes_deuda in df_deuda.columns and col_mes_deuda in df_deuda.columns:
-        
-        current_month_num = datetime.now().month
-        
-        # Sumatoria total de intereses en todo el DataFrame de deuda (o filtrado por año si tienes columna de año)
         total_interes_ytd = df_deuda[col_interes_deuda].sum()
-
         df_deuda["_Fecha_Temp"] = pd.to_datetime(df_deuda[col_mes_deuda], errors="coerce")
 
-        # 3. Obtenemos el año y mes actual del sistema
         current_year = datetime.now().year
         current_month = datetime.now().month
 
-        # 4. Filtramos el DataFrame para que coincida exactamente con el mes y año actual
         df_deuda_mes = df_deuda[
             (df_deuda["_Fecha_Temp"].dt.year == current_year) & 
             (df_deuda["_Fecha_Temp"].dt.month == current_month)
         ]
             
         total_interes_mes = df_deuda_mes[col_interes_deuda].sum()
-        
-        # Limpiamos la columna auxiliar temporal
         df_deuda = df_deuda.drop(columns=["_Fecha_Temp"], errors="ignore")
 
         col5.metric(
@@ -174,11 +160,9 @@ if df is not None and not df.empty:
     else:
         col5.metric(label="Intereses Cobrados", value="Datos no encontrados")
 
-    if col5.button("Ver más", key="btn_intereses"):
-        st.session_state.vista_activa = "intereses"
+    col5.button("Ver más", key="btn_intereses", on_click=cambiar_vista, args=("intereses",))
 
-    # --- 3. SECCIÓN DINÁMICA INFERIOR ---
-    # Usamos siempre 'df' uniformemente sin llamados duplicados a load_data()
+    # --- SECCIÓN DINÁMICA INFERIOR ---
     if st.session_state.vista_activa == "dispersiones":
         render_curva_financiera_generica(
             df=df,
@@ -186,17 +170,16 @@ if df is not None and not df.empty:
             titulo_base="Curva de Colocación Diaria",
             color_linea="royalblue",
             date_column="Fecha de Dispersión"
-            )
+        )
 
     elif st.session_state.vista_activa == "cartera":
-        # Llamamos a la nueva función de doble línea por día
         render_curva_cartera_dual(
             df=df,
             columna_metrica="Monto a Pagar a Kamina",
             titulo_base="Curva de Liquidación y Vencimientos",
             date_column="Fecha Vencimiento"
         )
-    # --- 3. Agregamos la vista dinámica para Revenue / Rebate ---
+
     elif st.session_state.vista_activa == "descuentos":
         render_curva_revenue_rebate_dual(
             df=df, 
@@ -217,7 +200,6 @@ if df is not None and not df.empty:
             date_column_conv="Fecha de Dispersión",
             date_column_deuda="Mes"
         )
-        
 
 else:
     st.warning("No se pudieron cargar los datos o el archivo está vacío.")

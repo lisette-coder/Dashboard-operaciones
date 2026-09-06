@@ -1,17 +1,8 @@
 import streamlit as st
-from utils import load_data
 
-st.set_page_config(page_title="Dispersiones", page_icon="💸", layout="wide")
+# Título de la página
+st.title("📈 Análisis Predictivo")
 
-st.title("💸 Análisis de Dispersiones y Disposiciones")
+# Banner en construcción con ícono/pin
+st.info("📌 **Página en construcción** — Estamos trabajando en esta sección.", icon="🚧")
 
-df = load_data()
-
-if df is not None:
-  # Aquí filtras y analizas exclusivamente lo relacionado con dispersiones
-  st.subheader("Monto Total Dispersado por Proveedor")
-  if "Monto Dispersado" in df.columns and "Proveedor" in df.columns:
-    disp_prov = df.groupby("Proveedor")["Monto Dispersado"].sum().reset_index()
-    st.dataframe(disp_prov, use_container_width=True)
-else:
-  st.warning("No se pudieron cargar los datos.")
