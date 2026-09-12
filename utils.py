@@ -43,9 +43,9 @@ def load_data_deuda():
     archivo = _download_drive_file()
     if archivo and os.path.exists(archivo):
         try:
-            df_deuda = pd.read_excel(archivo, sheet_name="Resumen interes")
+            df_deuda = pd.read_excel(archivo, sheet_name="Cap")
             return df_deuda
         except Exception as e:
-            st.error(f"Error al leer pestaña 'Resumen interes': {e}")
+            st.error(f"Error al leer pestaña 'Cap': {e}")
             return None
     return None

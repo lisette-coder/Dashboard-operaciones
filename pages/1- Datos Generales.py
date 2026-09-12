@@ -399,7 +399,7 @@ def render_curva_revenue_rebate_dual(df, date_column="Fecha de Dispersión"):
             },
             color_discrete_map={
                 "Revenue Kamina (80%)": "#0047AB",
-                "Rebate Broker (20%)": "#E4A0F8",
+                "Rebate Broker (20%)": "#8A2BE2",
             },
         )
         fig.update_traces(
@@ -467,7 +467,7 @@ def render_curva_clientes_activos_diarios(
         )
     with col2:
         st.metric(
-            label=f"Facturas / Dispersiones ({tipo_filtro})",
+            label=f"Facturas ({tipo_filtro})",
             value=f"{total_facturas:,}",
         )
     with col3:
@@ -540,10 +540,10 @@ def render_curva_revenue_vs_intereses(
     if (
         df_deuda is not None
         and not df_deuda.empty
-        and "Solicitudes Capital" in df_deuda.columns
+        and "SC" in df_deuda.columns
     ):
         total_capital_fondeo = (
-            pd.to_numeric(df_deuda["Solicitudes Capital"], errors="coerce")
+            pd.to_numeric(df_deuda["SC"], errors="coerce")
             .fillna(0)
             .sum()
         )
@@ -598,9 +598,9 @@ def render_curva_revenue_vs_intereses(
             "Revenue_Kamina"
         ].sum()
 
-    df_d_grouped = pd.DataFrame(columns=["Mes_Periodo", "Intereses del Periodo"])
+    df_d_grouped = pd.DataFrame(columns=["Mes_Periodo", "IP"])
     if df_deuda is not None and not df_deuda.empty:
-        col_interes = "Intereses del periodo"
+        col_interes = "IP"
         if (
             col_interes in df_deuda.columns
             and date_column_deuda in df_deuda.columns
@@ -614,7 +614,7 @@ def render_curva_revenue_vs_intereses(
             ).dt.to_period("M")
 
             df_d_grouped = int_temp.groupby("Mes_Periodo", as_index=False)[
-                "Intereses del periodo"
+                "IP"
             ].sum()
 
     if not df_c_grouped.empty:
@@ -624,7 +624,7 @@ def render_curva_revenue_vs_intereses(
             ).fillna(0)
         else:
             df_final = df_c_grouped
-            df_final["Intereses del periodo"] = 0.0
+            df_final["IP"] = 0.0
 
         df_final = df_final.sort_values(by="Mes_Periodo")
         df_final["Mes_Str"] = df_final["Mes_Periodo"].astype(str)
@@ -632,7 +632,7 @@ def render_curva_revenue_vs_intereses(
         fig = px.line(
             df_final,
             x="Mes_Str",
-            y=["Revenue_Kamina", "Intereses del periodo"],
+            y=["Revenue_Kamina", "IP"],
             markers=True,
             title="Comparativa Mensual: Revenue Kamina vs Intereses Cobrados",
             labels={
@@ -642,7 +642,7 @@ def render_curva_revenue_vs_intereses(
             },
             color_discrete_map={
                 "Revenue_Kamina": "#0047AB",
-                "Intereses_Cobrados": "#FF8C00",
+                "Intereses_Cobrados": "#8A2BE2",
             },
         )
 
@@ -863,7 +863,7 @@ def render_datos_generales(df, df_deuda):
 
     # --- TARJETA 5: Costo de Intereses ---
     col_mes_deuda = "Mes"
-    col_interes_deuda = "Intereses del mes"
+    col_interes_deuda = "IM"
 
     if (
         df_deuda is not None
@@ -1019,11 +1019,11 @@ if df is not None and not df.empty:
 
             columnas_deuda = [
                 "Mes",
-                "Solicitudes Capital",
-                "Saldo de Capital (acumulado)",
-                "Tasa Mensual",
-                "Intereses del periodo",
-                "Acumulado Intereses",
+                "SC",
+                "SC (acum)",
+                "TM",
+                "IP",
+                "AI",
             ]
 
             # Seleccionar únicamente las columnas que existan
@@ -1041,7 +1041,7 @@ if df is not None and not df.empty:
                 # 4. Formatear las columnas numéricas como moneda $0,000.00 y porcentaje
                 
                 # Excluimos 'Mes' y 'Tasa Mensual' de las columnas monetarias
-                cols_moneda = [col for col in cols_existentes if col not in ["Mes", "Tasa Mensual"]]
+                cols_moneda = [col for col in cols_existentes if col not in ["Mes", "TM"]]
                 
                 # Formato $0,000.00 para Dinero
                 for col in cols_moneda:
@@ -1049,12 +1049,12 @@ if df is not None and not df.empty:
                     df_tabla_deuda[col] = df_tabla_deuda[col].apply(lambda x: f"${x:,.2f}")
 
                 # Formato 0.00% para Tasa Mensual
-                if "Tasa Mensual" in cols_existentes:
-                    df_tabla_deuda["Tasa Mensual"] = pd.to_numeric(df_tabla_deuda["Tasa Mensual"], errors="coerce").fillna(0)
+                if "TM" in cols_existentes:
+                    df_tabla_deuda["TM"] = pd.to_numeric(df_tabla_deuda["TM"], errors="coerce").fillna(0)
                     
                     # NOTA: Si en tus datos el 2% viene como 0.02, usa: f"{x * 100:,.2f}%"
                     # Si en tus datos ya viene como 2.0, usa: f"{x:,.2f}%"
-                    df_tabla_deuda["Tasa Mensual"] = df_tabla_deuda["Tasa Mensual"].apply(
+                    df_tabla_deuda["TM"] = df_tabla_deuda["TM"].apply(
                         lambda x: f"{x * 100:,.2f}%" if x <= 1 and x > 0 else f"{x:,.2f}%"
                     )
 
