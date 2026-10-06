@@ -258,7 +258,7 @@ def render_barras_acumuladas(
                 "<b>Mes: %{y}</b>"
                 "<br><br>"
                 "Revenue: <b>$%{customdata[0]:,.2f}</b><br>"
-                "Gross Profit (80%): <b>$%{customdata[1]:,.2f}</b><br>"
+                "Ingresos Netos: <b>$%{customdata[1]:,.2f}</b><br>"
                 "Rebate (20%): <b>$%{customdata[2]:,.2f}</b><br>"
                 "Intereses por Mora: <b>$%{customdata[3]:,.2f}</b><br><br>"
                 "<b>Rebate Neto: $%{customdata[4]:,.2f}</b>"
@@ -320,7 +320,7 @@ def render_barras_acumuladas(
 
         st.metric(label="Revenue (100%)", value=f"${total_revenue:,.2f}")
         st.divider()
-        st.metric(label="Gross Profit (80%)", value=f"${total_gross_profit:,.2f}")
+        st.metric(label="Ingresos Netos", value=f"${total_gross_profit:,.2f}")
         st.divider()
         st.metric(label="Rebate (20%)", value=f"${total_rebate:,.2f}")
         st.divider()

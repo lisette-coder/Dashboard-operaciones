@@ -182,7 +182,7 @@ def render_kpis(df, df_deuda=None):
         reb_mes = df_mes_actual["Descuento_Num"].sum() * 0.80
 
         col3.metric(
-            label=f"Gross Profit ({anio_kpi})",
+            label=f"Ingresos Netos ({anio_kpi})",
             value=f"${rev_ytd:,.2f}",
             delta=f"{nombre_mes_sel}: ${reb_mes:,.2f}",
             delta_color="off",
